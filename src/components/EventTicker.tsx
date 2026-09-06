@@ -92,12 +92,28 @@ function describe(e: VizEvent): string {
 export function EventTicker({ events, step }: { events: VizEvent[]; step: number }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Scroll ONLY this panel's own list, never the page. scrollIntoView() was
+  // used before, but it walks up every scrollable ancestor (including the
+  // <main> the visualizer sits in) and drags the whole page down to keep the
+  // ticker line visible — pulling focus off the visualization on every step.
+  // Computing scrollTop by hand and calling scrollTo() on this container
+  // keeps the effect fully local to the event-trace panel.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const activeEl = el.querySelector(`[data-idx="${step - 1}"]`);
-    if (activeEl && typeof activeEl.scrollIntoView === "function") {
-      activeEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    const activeEl = el.querySelector<HTMLElement>(`[data-idx="${step - 1}"]`);
+    if (!activeEl) return;
+
+    const containerRect = el.getBoundingClientRect();
+    const activeRect = activeEl.getBoundingClientRect();
+
+    const elTop = activeRect.top - containerRect.top + el.scrollTop;
+    const elBottom = elTop + activeRect.height;
+
+    if (elTop < el.scrollTop) {
+      el.scrollTo({ top: elTop, behavior: "smooth" });
+    } else if (elBottom > el.scrollTop + el.clientHeight) {
+      el.scrollTo({ top: elBottom - el.clientHeight, behavior: "smooth" });
     }
   }, [step]);
 
